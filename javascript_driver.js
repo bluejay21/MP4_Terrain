@@ -122,13 +122,8 @@ function fillScreen() {
 function makeGeom()
 {
     var gridSize = document.getElementById("gridsize").value
-    var faults = document.getElementById("faults").value
     let positionIndex = 0
     let colorIndex = 1
-
-    // console.log("Button Pressed")
-    // console.log("gridsize: " + String(gridSize))
-    // console.log("faults: " + String(faults))
 
     var faultPlane = 
     {"triangles":
@@ -142,47 +137,86 @@ function makeGeom()
         ]
     }
 
+    var n = gridSize*1
+
     // Make the vertices
-    stepSize = 2/(gridSize-1) 
-    for (let i=-1; i<=1; i+=stepSize) {
-        for (let j=-1; j<=1; j+=stepSize) {
-            faultPlane.attributes[positionIndex].push([i, 0, j])
-            faultPlane.attributes[colorIndex].push([Math.random(), Math.random(), Math.random()])
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+            var x = ((i/n)*2) - 1
+            var z = ((j/n)*2) - 1
+            faultPlane.attributes[positionIndex].push([x, 0, z])
+            var randomColor = Math.random()
+            faultPlane.attributes[colorIndex].push([randomColor, randomColor, randomColor])
         }
     }
 
     // Make the triangles
-    var n = gridSize*1
-    for (let i = 0; (i+n+1) < faultPlane.attributes[positionIndex].length; i++) {
-        faultPlane.triangles.push(i)
-        faultPlane.triangles.push(i+1)
-        faultPlane.triangles.push(i+n)
+    for (let i = 0; i < (n-1); i++) {
+        for (let j = 0; j < (n-1); j++) {
+            var pos = (i*n)+j
+            faultPlane.triangles.push(pos)
+            faultPlane.triangles.push(pos+1)
+            faultPlane.triangles.push(pos+n)
 
-        faultPlane.triangles.push(i+1)
-        faultPlane.triangles.push(i+n)
-        faultPlane.triangles.push(i+n+1)
+            faultPlane.triangles.push(pos+1)
+            faultPlane.triangles.push(pos+n)
+            faultPlane.triangles.push(pos+n+1)
+        }
     }
 
-    return faultPlane
+    return faultingMethod(faultPlane)
 }
 
 function faultingMethod(gridPlane) {
     // Generate a random point p in the (x,0,z) bounds of the grid
-    var random_x = (Math.random()*2)-1
-    var random_z = (Math.random()*2)-1
-    p = [random_x, 0, random_z]
+    var numFaults = document.getElementById("faults").value
+    var random_x = 0
+    var random_z = 0
+    var random_theta = 0
+    var normal_vector = 0
+    var p = 0
+    var displacement = 1
+    var max = 0
+    var min = 0
+    var c = 1
+    var positionIndex = 0
+    var colorIndex = 1
 
-    var random_theta = Math.random()*2*Math.PI
-    var normal_vector = [Math.sin(random_theta), 0, Math.cos(random_theta)]
+    // Displace the vertices in the grid with numFaults faults
+    for(var i = 0; i < numFaults; i++) {
+        random_x = (Math.random()*2)-1
+        random_z = (Math.random()*2)-1
+        p = [random_x, 0, random_z]
 
-    for(b in gridPlane) {
-        random_point_delta = pointSubtraction(b,p)
-        if (dotProduct(random_point_delta, normal_vector, random_theta) > 0) {
-            // raise point
-        } else {
-            // lower point
+        random_theta = Math.random()*2*Math.PI
+        normal_vector = [Math.sin(random_theta), 0, Math.cos(random_theta)]
+        
+        for(var j = 0; j < gridPlane.attributes[positionIndex].length; j++) {
+            b = gridPlane.attributes[positionIndex][j]
+            random_point_delta = pointSubtraction(b,p)
+            if (dotProduct(random_point_delta, normal_vector, random_theta) > 0) {
+                b[1] += displacement
+            } else {
+                b[1] -= displacement
+            }
         }
     }
+
+    // determine the max and min in the grid
+    for(var i = 0; i < gridPlane.attributes[positionIndex].length; i++) {
+        b = gridPlane.attributes[positionIndex][i]
+        max = Math.max(max, b[1])
+        min = Math.min(min, b[1])
+    }
+
+    // Normalize the heights in the grid
+    for(var i = 0; i < gridPlane.attributes[positionIndex].length; i++) {
+        b = gridPlane.attributes[positionIndex][i]
+        height = b[1]
+        b[1] = (c * (height - (0.5*(max+min)))) / (max - min)
+    }
+
+    return gridPlane
 }
 
 function pointSubtraction(a,b) {
@@ -192,9 +226,7 @@ function pointSubtraction(a,b) {
 }
 
 function dotProduct(a,b,theta) {
-    abs_a = Math.sqrt((a[0]^2) + (a[1]^2) + (a[2]^2))
-    abs_b = Math.sqrt((b[0]^2) + (b[1]^2) + (b[2]^2))
-    return abs_a*abs_b*Math.cos(theta)
+    return ((a[0]*b[0])+(a[1]*b[1])+(a[2]*b[2]))
 }
 
 function draw(seconds) {
@@ -206,7 +238,7 @@ function draw(seconds) {
     // gl.uniform4fv(program.uniforms.color, IlliniOrange)
 
     let m = m4rotX(0)
-    let v = m4view([1,2,3], [0,0,0], [0,1,0])
+    let v = m4view([Math.cos(seconds),1.5,1.5], [0,0,0], [0,1,0])
     gl.uniformMatrix4fv(program.uniforms.mv, false, m4mul(v,m))
     gl.uniformMatrix4fv(program.uniforms.p, false, p)
     gl.drawElements(geom.mode, geom.count, geom.type, 0)
@@ -232,10 +264,6 @@ window.addEventListener('load', async (event) => {
     gl.enable(gl.DEPTH_TEST)
     window.geom = setupGeomery(makeGeom())
     fillScreen()
-    // window.addEventListener('resize', fillScreen)
-    // window.keysBeingPressed = {}
-    // window.addEventListener('keydown', event => keysBeingPressed[event.key] = true)
-    // window.addEventListener('keyup', event => keysBeingPressed[event.key] = false)
     var regenerateButton = document.getElementById("submit")
     regenerateButton.addEventListener("click", async (event) => {
         window.geom = setupGeomery(makeGeom())
